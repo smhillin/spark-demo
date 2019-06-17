@@ -11,7 +11,7 @@ s3_resourse = boto3.resource('s3')
 ACCESS_KEY= login(config.access_key, config.secret_key)
 SECRET_KEY =
 S3_REGION= "us-east-1"
-credentials = {"aws_access_key_id" : "AKIASFMLIS6P5SVJVZCP", "aws_session_access_key" : "k0rNwTXiN7tdhP1qsCd1j1fhfK7cIPo3JLZlST3Z"}
+credentials = {"aws_access_key_id" : , "aws_session_access_key" : }
 
 
 
