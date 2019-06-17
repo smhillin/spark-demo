@@ -2,14 +2,14 @@ import datetime
 from operator import add
 import boto3
 from kafka import KafkaConsumer
-from log_parser import LogRow
 from pyspark import SparkContext, SparkConf
 import time
 import logging
+import config
 
 s3_resourse = boto3.resource('s3')
-ACCESS_KEY= "AKIASFMLIS6P5SVJVZCP"
-SECRET_KEY = "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"
+ACCESS_KEY= login(config.access_key, config.secret_key)
+SECRET_KEY =
 S3_REGION= "us-east-1"
 credentials = {"aws_access_key_id" : "AKIASFMLIS6P5SVJVZCP", "aws_session_access_key" : "k0rNwTXiN7tdhP1qsCd1j1fhfK7cIPo3JLZlST3Z"}
 
@@ -24,7 +24,12 @@ credentials = {"aws_access_key_id" : "AKIASFMLIS6P5SVJVZCP", "aws_session_access
 
 
 list = "lists/blacklist.txt"
-logging.basicConfig(level=logging.DEBUG)
+
+pyspark_log = logging.getLogger('pyspark')
+pyspark_log.setLevel(logging.ERROR)
+
+
+logging.basicConfig(filename = 'blacklist-logs/app.log', level=logging.DEBUG, filemode='w', format='%(name)s - %(levelname)s - %(message)s')
 
 class LogRow:
 
@@ -115,7 +120,7 @@ class BlackLister():
     @staticmethod
     def terminal_logger(message, verbose= False):
         if verbose:
-            print(message)
+            logging.debug(message)
 
     """
     parses log input and returns and RDD with date, http, ip key value pairs
@@ -131,7 +136,7 @@ class BlackLister():
     """
     def dateIpTuple(self):
         rdd = self.parsed.map(lambda x: (x['date'], x['ip']))
-        print('(Date,IP) Tuple Created')
+        logging.debug('(Date,IP) Tuple Created')
         return (rdd)
 
     """
@@ -139,8 +144,8 @@ class BlackLister():
     """
     def dateTuple(self):
         rdd = self.parsed.map(lambda x: (x['date'], 1))
-        print('(Date,1) Tuple Created')
-        print(rdd.take(2))
+        logging.debug('(Date,1) Tuple Created')
+        logging.debug(rdd.take(2))
         return(rdd)
 
     """
@@ -148,16 +153,16 @@ class BlackLister():
     """
     def ipTuple(self):
         rdd = self.parsed.map(lambda x: (x['ip'],1))
-        print('(IP,1) Tuple Created')
-        print(rdd.take(2))
+        logging.debug('(IP,1) Tuple Created')
+        logging.debug(rdd.take(2))
         return(rdd)
     """
     Create a (date, freq) tuple
     """
     def dateFreq(self):
         rdd = self.dateTuple.reduceByKey(add)
-        print('(Date, Freq) Tuple Created')
-        print(rdd.take(2))
+        logging.debug('(Date, Freq) Tuple Created')
+        logging.debug(rdd.take(2))
         return(rdd)
 
     """
@@ -166,21 +171,21 @@ class BlackLister():
 
     def ipFreq(self):
         rdd = self.ipTuple.reduceByKey(add).sortBy(lambda x: x[1], False)
-        print('(IP,Frequency) Computed')
-        print(rdd.take(2))
+        logging.debug('(IP,Frequency) Computed')
+        logging.debug(rdd.take(2))
         return rdd
 
     """
     Given a dateFreq Find the mean frequency hits by date
     """
     def meanDateFreq(self):
-        print('mean date starting')
+        logging.debug('mean date starting')
         rdd = self.dateFreq
-        print(rdd.take(2))
+        logging.debug(rdd.take(2))
         rdd = rdd.map(lambda x: x[1])
-        print(rdd.take(2))
+        logging.debug(rdd.take(2))
         mean = rdd.mean()
-        print('Mean Date Frequency Computed: %f' % mean)
+        logging.debug('Mean Date Frequency Computed: %f' % mean)
         return(mean)
 
     """
@@ -189,7 +194,7 @@ class BlackLister():
 
     def sdDateFreq(self):
         sd = self.dateTuple.map(lambda x: float(x[1])).stdev()
-        print('SD Date Frequency Computed: %f ' % sd)
+        logging.debug('SD Date Frequency Computed: %f ' % sd)
         return(sd)
 
     """
@@ -199,7 +204,7 @@ class BlackLister():
     def meanIpHits(self):
         rdd = self.ipFreqTuple.map(lambda x: float(x[1]))
         mean = rdd.mean()
-        print('Mean IP Hits Computed: %f' % mean)
+        logging.debug('Mean IP Hits Computed: %f' % mean)
         return(mean)
 
     """
@@ -208,7 +213,7 @@ class BlackLister():
 
     def sdIpHits(self):
         sd = self.ipFreqTuple.map(lambda x: x[1]).stdev()
-        print('SD IP Hits Computed: %f' % sd)
+        logging.debug('SD IP Hits Computed: %f' % sd)
         return(sd)
 
 
@@ -232,7 +237,7 @@ class BlackLister():
         sd = self.sdFreq
         rdd = self.dateFreq
         rdd = rdd.filter(lambda x: (x[1]-mean) > (sd * 2))
-        print('Suspicious IP RDD Computed')
+        logging.debug('Suspicious IP RDD Computed')
         return(rdd)
 
     """
@@ -243,14 +248,14 @@ class BlackLister():
     def blackList(self):
         # join and create tuple for blacklisted ips
         date_tuple_select = self.selectSuspicious()
-        print('Date Tuple Select')
-        print(date_tuple_select.take(2))
+        logging.debug('Date Tuple Select')
+        logging.debug(date_tuple_select.take(2))
         rdd = self.dateIpTuple()
         date_black = date_tuple_select.join(rdd)
-        print(date_black.take(2))
+        logging.debug(date_black.take(2))
         ip_black = date_black.map(lambda x: (x[1][1], x[1][0]))
-        print('Black Listed IPs')
-        print(ip_black.take(2))
+        logging.debug('Black Listed IPs')
+        logging.debug(ip_black.take(2))
 
 
 
@@ -262,8 +267,8 @@ class BlackLister():
         tolerance = self.meanIpHits + self.sdIpHits
         black_list = ip_black_freq.filter(lambda x: x[1] > tolerance)
 
-        print('Black List Computed')
-        print(black_list.take(2))
+        logging.debug('Black List Computed')
+        logging.debug(black_list.take(2))
         return(black_list)
 
     @staticmethod
@@ -290,7 +295,7 @@ class BlackLister():
                 .collect()
             for ip in black_list:
                 f.write(ip + "\n")
-        print('Blacklisted IPs written to File ')
+        logging.debug('Blacklisted IPs written to File ')
 
     def write2file(self,list):
         with open(list, mode="a+", encoding="utf-8") as f:
@@ -300,10 +305,10 @@ class BlackLister():
                 .collect()
             for ip in black_list:
                 f.write(ip + "\n")
-        print('Blacklisted IPs written to File ')
+        logging.debug('Blacklisted IPs written to File ')
 
     def write2DB(self):
-        print('writing to db....')
+        logging.debug('writing to db....')
         self.black_list \
             .map(lambda x: x[0]) \
             .distinct() \
@@ -322,8 +327,8 @@ class BlackLister():
             }
         )
         if verbose:
-            print('writing....')
-            print('ip:', item)
+            logging.debug('writing....')
+            logging.debug('ip:', item)
 
 
 if __name__ == "__main__":
@@ -350,16 +355,16 @@ if __name__ == "__main__":
         window = consumer.poll(timeout_ms=6000)
         if(window):
             for tp, messages in window.items():
-                # print('yes')
+                # logging.debug('yes')
                 # for message in messages:
                 #     queue.append(message.value.decode('ascii'))
                 queue_rdd = sc.parallelize(messages)
                 queue_rdd = queue_rdd.map(lambda x: x.value.decode('ascii'))
-                print("Count:",queue_rdd.count())
+                logging.debug("Count:",queue_rdd.count())
             bl = BlackLister(queue_rdd)
             bl.write2DB()
             #bl.write2file('lists/blacklist.txt')
-        print('waiting.....')
+        logging.debug('waiting.....')
         time.sleep(5)
 
 
