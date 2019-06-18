@@ -15,18 +15,9 @@ with open("../creds.yaml", 'r') as ymlfile:
 s3_resourse = boto3.resource('s3')
 ACCESS_KEY = cfg['aws']['access_key']
 SECRET_KEY = cfg['aws']['secret_key']
-S3_REGION = cfg['aws']['us-east-1']
-VERBOSE = True
+S3_REGION = cfg['aws']['s3_region']
+VERBOSE = False
 
-
-
-
-
-
-
-
-#load logs into spark
-#log=sc.textFile("apache-logs/logs")
 
 
 list = "lists/blacklist.txt"
@@ -340,9 +331,6 @@ if __name__ == "__main__":
     sc = SparkContext(conf=conf)
 
 
-
-
-
     kafka_topic = 'test'
     group_id = 'log_consumer_group'
 
@@ -353,6 +341,7 @@ if __name__ == "__main__":
 
     #loop through
     while True:
+        start = time.time()
         window = consumer.poll(timeout_ms=6000)
         if(window):
             for tp, messages in window.items():
@@ -363,6 +352,9 @@ if __name__ == "__main__":
             bl.write2DB()
             #bl.write2file('lists/blacklist.txt')
         print('waiting.....')
+        end = time.time()
+        total_time = end-start
+        print("Application Time: %i", total_time)
         time.sleep(5)
 
 
